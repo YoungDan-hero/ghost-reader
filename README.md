@@ -2,23 +2,11 @@
 
 > 一个伪装成 macOS 终端的本地 TXT 小说阅读器 —— 一键切换，老板来了秒变构建日志。
 
-[![platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black)](#)
+[![platform](<https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black>)](#)
 [![electron](https://img.shields.io/badge/Electron-31-47848F)](#)
 [![license](https://img.shields.io/badge/license-MIT-green)](#)
 
 A local TXT novel reader disguised as a macOS Terminal. Press **Space** to flip between your novel and a stream of fake build logs — instant camouflage when someone walks by.
-
----
-
-## 截图
-
-| 阅读态（伪装成 `cat` 输出） | 伪装态（滚动的构建日志） |
-| :---: | :---: |
-| _你的小说，纯终端风格_ | _一屏不断刷新的 `[ OK ] / [INFO] / [WARN]` 日志_ |
-
-> 提示：仓库里放两张实际截图（`docs/reading.png`、`docs/disguise.png`）会更直观。
-
----
 
 ## 为什么做这个
 
@@ -41,17 +29,17 @@ A local TXT novel reader disguised as a macOS Terminal. Press **Space** to flip 
 
 ## 快捷键
 
-| 按键 | 功能 |
-| :--- | :--- |
-| `Space` | 阅读 ⇄ 伪装日志 互切（核心老板键） |
-| `Esc` | 有搜索高亮时先清高亮；否则切到伪装态 |
-| `↑` `↓` / `j` `k` | 上下翻页 |
-| `←` `→` / `h` `l` | 上一章 / 下一章 |
-| `g` | 跳转到指定章节 |
-| `/` | 全文搜索关键字 |
-| `b` | 打开书架 |
-| `o` | 导入本地 TXT |
-| `⌘ Space` | 全局快捷键，任何界面下强制秒切伪装 |
+| 按键              | 功能                                 |
+| :---------------- | :----------------------------------- |
+| `Space`           | 阅读 ⇄ 伪装日志 互切（核心老板键）   |
+| `Esc`             | 有搜索高亮时先清高亮；否则切到伪装态 |
+| `↑` `↓` / `j` `k` | 上下翻页                             |
+| `←` `→` / `h` `l` | 上一章 / 下一章                      |
+| `g`               | 跳转到指定章节                       |
+| `/`               | 全文搜索关键字                       |
+| `b`               | 打开书架                             |
+| `o`               | 导入本地 TXT                         |
+| `⌘ Space`         | 全局快捷键，任何界面下强制秒切伪装   |
 
 ## 快速开始
 
@@ -87,6 +75,7 @@ npm run dmg
 - `release/mac-arm64/Terminal.app` —— 可直接双击运行
 
 > 国内打包加镜像：
+>
 > ```bash
 > ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
 > ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
