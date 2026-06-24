@@ -1,0 +1,48 @@
+{
+  "name": "terminal-helper",
+  "productName": "Terminal",
+  "version": "1.0.0",
+  "description": "A terminal utility.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dmg": "electron-builder --mac dmg"
+  },
+  "author": "yangdan",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "31.0.0",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.yangdan.terminal",
+    "productName": "Terminal",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "dir",
+          "arch": ["arm64"]
+        }
+      ],
+      "identity": null
+    },
+    "dmg": {
+      "title": "Terminal"
+    }
+  }
+}

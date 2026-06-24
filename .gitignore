@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+release/
+dist/
+out/
+
+# App runtime data (local only)
+store.json
+
+# Logs
+npm-debug.log*
+*.log
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Workspace memory (local notes, not for publishing)
+.workbuddy/

@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Terminal — bash</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --fg: #c8c8c8;
+    --green: #4ec07a;
+    --blue: #5aa7e4;
+    --yellow: #d7ba7d;
+    --gray: #6a6a6a;
+    --red: #e06c75;
+    --prompt: #4ec07a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    overflow: hidden;
+    font-family: "SF Mono", "Menlo", "Monaco", "Consolas", ui-monospace, monospace;
+  }
+  /* 标题栏:伪装成 macOS 终端 */
+  #titlebar {
+    height: 30px;
+    background: #323233;
+    display: flex;
+    align-items: center;
+    padding: 0 12px 0 80px;
+    -webkit-app-region: drag;
+    user-select: none;
+    border-bottom: 1px solid #1a1a1a;
+  }
+  #title-text {
+    flex: 1;
+    text-align: center;
+    color: #b0b0b0;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+  }
+  #term {
+    height: calc(100% - 30px);
+    padding: 10px 16px 40px;
+    overflow-y: auto;
+    color: var(--fg);
+    font-size: 13.5px;
+    line-height: 22px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    scroll-behavior: auto;
+    overflow-anchor: none;
+    transform: translateZ(0);
+    will-change: scroll-position;
+  }
+  .logrow { height: 22px; line-height: 22px; overflow: hidden; }
+  #term::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  .prompt-line { color: var(--gray); margin: 4px 0; }
+  .prompt-user { color: var(--green); }
+  .prompt-host { color: var(--fg); }
+  .prompt-path { color: var(--blue); }
+  .cmd { color: var(--fg); }
+  .novel-body { color: #b8c4a8; }
+  .log-info { color: var(--gray); }
+  .log-ok { color: var(--green); }
+  .log-warn { color: var(--yellow); }
+  .log-err { color: var(--red); }
+  .log-time { color: #5a5a5a; }
+  .lvl { white-space: pre; }
+  .lvltext {
+    display: inline-block;
+    width: 4ch;
+    text-align: center;
+  }
+  .hint {
+    color: #555;
+    font-size: 12px;
+    padding: 2px 14px;
+    background: #1a1a1a;
+    height: 24px;
+    line-height: 24px;
+    border-top: 1px solid #2a2a2a;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .hint .spacer { flex: 1 1 auto; min-width: 8px; }
+  .hint .hstat { flex: 0 0 auto; color: #7a7a6a; white-space: nowrap; }
+  .hint .htxt {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hint .act {
+    flex: 0 0 auto;
+    color: #8a9a78;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    white-space: nowrap;
+  }
+  .hint .act:hover { color: var(--green); text-decoration: underline; }
+  .open-cmd { cursor: pointer; }
+  .open-cmd:hover .cmd { text-decoration: underline; }
+  .open-cmd .blink-hint { color: #4a5a3a; margin-left: 8px; font-size: 12px; }
+  .shelf { margin: 8px 0; }
+  .shelf-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 4px 6px; border-radius: 4px;
+  }
+  .shelf-item:hover { background: #2a2a2a; }
+  .shelf-name { color: #b8c4a8; cursor: pointer; flex: 1; }
+  .shelf-name:hover { color: var(--green); text-decoration: underline; }
+  .shelf-prog { color: #6a6a6a; font-size: 12px; }
+  .shelf-del { color: #5a5a5a; cursor: pointer; padding: 0 4px; }
+  .shelf-del:hover { color: var(--red); }
+  .shelf-miss { color: var(--yellow); font-size: 12px; }
+  .shelf-empty { color: #6a6a6a; padding: 8px 6px; }
+  .shelf-foot { margin-top: 10px; color: #5a5a5a; }
+  .cursor {
+    display: inline-block;
+    width: 8px; height: 15px;
+    background: var(--fg);
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .empty-tip { color: #6a6a6a; }
+  /* 正文内关键字高亮(伪装成日志里的高亮匹配) */
+  mark.hit {
+    background: #4a4420; color: #ffe08a;
+    border-radius: 2px; padding: 0 1px;
+  }
+  mark.hit.cur { background: #6e5a12; color: #fff3c4; outline: 1px solid #b89a3a; }
+  /* 命令行输入面板:伪装成在终端里敲命令 */
+  .cmdline { color: var(--gray); margin: 2px 0; }
+  .cmdline .cinput {
+    background: transparent; border: none; outline: none;
+    color: var(--fg); font: inherit; width: 60%; caret-color: var(--green);
+  }
+  .cmdline .ctip { color: #5a5a4a; font-size: 12px; margin-left: 8px; }
+  /* grep 结果列表 */
+  .grep-list { margin: 6px 0; }
+  .grep-row {
+    display: flex; gap: 10px; padding: 3px 6px; border-radius: 4px;
+    cursor: pointer; align-items: baseline;
+  }
+  .grep-row:hover, .grep-row.sel { background: #2a2a2a; }
+  .grep-ch { color: #6a8a5a; flex: 0 0 auto; font-size: 12px; min-width: 84px; }
+  .grep-snip { color: #b0b0a0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grep-snip mark { background: #4a4420; color: #ffe08a; }
+  .grep-empty { color: #6a6a6a; padding: 6px; }
+  /* 章节跳转列表 */
+  .goto-list { margin: 6px 0; }
+  .goto-row {
+    display: flex; gap: 10px; padding: 3px 6px; border-radius: 4px;
+    cursor: pointer; align-items: baseline;
+  }
+  .goto-row:hover, .goto-row.sel { background: #2a2a2a; }
+  .goto-row.now { color: var(--green); }
+  .goto-idx { color: #6a6a6a; flex: 0 0 auto; min-width: 44px; font-size: 12px; }
+  .goto-title { color: #b8c4a8; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .goto-row .goto-title mark { background: #4a4420; color: #ffe08a; }
+</style>
+</head>
+<body>
+  <div id="titlebar">
+    <div id="title-text">yangdan — -bash — 90×24</div>
+  </div>
+  <div id="term"></div>
+  <div class="hint" id="hint"></div>
+
+<script>
+(function () {
+  const term = document.getElementById('term');
+  const hint = document.getElementById('hint');
+
+  // ===== 状态 =====
+  let mode = 'disguise';        // 'reading' | 'disguise'
+  let chapters = [];            // 章节数组
+  let chapterIdx = 0;
+  let novelName = 'novel.log';
+  let disguiseTimer = null;
+  let importedOnce = false;     // 是否已导入过(导入后隐藏「点这里」提示)
+  let currentPath = null;       // 当前书的绝对路径(缓存键)
+  let pendingScrollRatio = 0;   // 恢复进度时,待应用的章内滚动比例
+  let lastScrollRatio = 0;      // 最近一次离开阅读态时的章内位置(内存级,用于切回瞬时恢复)
+  let shelfReturnTo = 'reading';// 退出书架时回到哪里:'reading' | 'disguise'
+  let saveTimer = null;         // 进度保存防抖
+  // 搜索高亮态:当前章内待高亮的关键字 + 命中游标
+  let activeQuery = '';         // 进入某章后要在正文里高亮的词(空=不高亮)
+  let hitIndex = 0;             // n/N 在本章命中之间跳转的游标
+  let panelReturnTo = 'reading';// 退出命令面板回到哪里
+
+  // ===== 进度保存(防抖 + 立即两种)=====
+  function currentScrollRatio() {
+    const max = term.scrollHeight - term.clientHeight;
+    return max > 0 ? Math.min(1, Math.max(0, term.scrollTop / max)) : 0;
+  }
+  function saveProgressNow() {
+    if (!currentPath || mode !== 'reading') return;
+    window.api.saveProgress({
+      filePath: currentPath,
+      chapterIdx: chapterIdx,
+      scrollRatio: currentScrollRatio(),
+    });
+  }
+  function saveProgressDebounced() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveProgressNow, 500);
+  }
+
+  const PROMPT = '<span class="prompt-user">yangdan@MacBook-Pro</span><span class="prompt-host">:</span><span class="prompt-path">~/work/server</span><span class="prompt-line">$</span> ';
+
+  // ===== 工具:HTML 转义 =====
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ===== 把小说文本切成章节 =====
+  // 章节标题正则:第 与 数字 与 章/节/回 之间都允许任意数量空白
+  //   \s* 兼容半角空格/制表符;\u3000* 额外兼容中文全角空格
+  //   数字段含阿拉伯数字与中文数字(零~万、两)
+  const reChapter = /^[\s\u3000]*第[\s\u3000]*[0-9零一二两三四五六七八九十百千万]+[\s\u3000]*[章节回][\s\u3000]*/;
+  function isChapterTitle(line) {
+    // 标题行通常较短;过长的多半是正文里恰好出现的"第..章",排除掉
+    return reChapter.test(line) && line.trim().length <= 30;
+  }
+  function splitChapters(text) {
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    const result = [];
+    let buf = [];
+    for (const line of lines) {
+      if (isChapterTitle(line) && buf.length > 0) {
+        result.push(buf.join('\n'));
+        buf = [line];
+      } else {
+        buf.push(line);
+      }
+    }
+    if (buf.length) result.push(buf.join('\n'));
+    return result.filter(c => c.trim().length > 0);
+  }
+
+  // 取一章的标题(首个非空行);没有可识别标题则给"第N章"兜底
+  function chapterTitleOf(chapterText, idx) {
+    const firstLine = (chapterText.split('\n').find(l => l.trim().length > 0) || '').trim();
+    if (firstLine && firstLine.length <= 40) return firstLine;
+    return '第 ' + (idx + 1) + ' 节';
+  }
+  // 把中文数字串转成阿拉伯数字(支持 零~九 十 百 千 万,如 "二十八"->28 "一百零五"->105)
+  function cnNumToInt(s) {
+    if (/^\d+$/.test(s)) return parseInt(s, 10);
+    const digit = { '零':0,'〇':0,'一':1,'二':2,'两':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9 };
+    const unit = { '十':10,'百':100,'千':1000 };
+    let total = 0, section = 0, num = 0;
+    for (const ch of s) {
+      if (digit[ch] !== undefined) { num = digit[ch]; }
+      else if (unit[ch] !== undefined) {
+        const u = unit[ch];
+        section += (num === 0 ? 1 : num) * u; // "十" 开头当 "一十"
+        num = 0;
+      } else if (ch === '万') {
+        total += (section + num) * 10000; section = 0; num = 0;
+      }
+    }
+    return total + section + num;
+  }
+  // 从一章标题里解析"作者写的真实章号";解析不到返回 null
+  function parseChapterNo(title) {
+    const m = title.match(/第\s*([0-9零〇一二两三四五六七八九十百千万]+)\s*[章节回]/);
+    if (!m) return null;
+    const n = cnNumToInt(m[1]);
+    return n > 0 ? n : null;
+  }
+  // 章节标题缓存 + 真实章号缓存(随 chapters 一起重建)
+  let chapterTitles = [];
+  let chapterNos = [];   // chapterNos[i] = 该章作者写的章号(null 表示无,如楔子/序章)
+  function rebuildTitles() {
+    chapterTitles = chapters.map((c, i) => chapterTitleOf(c, i));
+    chapterNos = chapterTitles.map(t => parseChapterNo(t));
+  }
+  // 按"作者真实章号"找数组下标;找不到返回 -1
+  function indexByChapterNo(no) {
+    return chapterNos.findIndex(n => n === no);
+  }
+
+  // ===== 渲染阅读态:cat 日志输出风格 =====
+  function renderReading() {
+    if (disguiseTimer) { clearTimeout(disguiseTimer); disguiseTimer = null; }
+    mode = 'reading';
+    const chapter = chapters[chapterIdx] || '';
+    // 顶部那行可点击的 open 命令,就是导入入口(伪装成在终端里 open 一个文件)
+    const openLine =
+      '<div class="open-cmd" id="open-cmd" title="点击导入本地 txt 小说">' +
+        PROMPT + '<span class="cmd">open ./logs/' + esc(novelName) + '</span>' +
+        '<span class="blink-hint">' + (importedOnce ? '' : '← 点这里导入你的 txt') + '</span>' +
+      '</div>';
+    // 正文:没导入任何书时给一行引导(伪装成终端提示);否则正常渲染(含搜索高亮)
+    const bodyHtml = chapters.length === 0
+      ? '<span class="empty-tip">No log file loaded. 按 o 或点上方 open 导入 .txt</span>'
+      : (activeQuery ? highlightBody(chapter, activeQuery) : esc(chapter));
+    term.innerHTML =
+      openLine +
+      '<div class="novel-body">' + bodyHtml + '</div>' +
+      '<div>' + PROMPT + '<span class="cursor"></span></div>';
+    // 定位优先级:有搜索命中 → 滚到当前命中处;否则恢复进度;否则回顶
+    if (activeQuery) {
+      requestAnimationFrame(() => scrollToHit(hitIndex));
+    } else if (pendingScrollRatio > 0) {
+      requestAnimationFrame(() => {
+        const max = term.scrollHeight - term.clientHeight;
+        term.scrollTop = max > 0 ? max * pendingScrollRatio : 0;
+        pendingScrollRatio = 0;
+      });
+    } else {
+      term.scrollTop = 0;
+    }
+    // 底部状态栏(含跳章/搜索/书架 + 命中计数)
+    updateReadingHint();
+    // 绑定顶部 open 行点击导入
+    const oc = document.getElementById('open-cmd');
+    if (oc) oc.onclick = importNovel;
+  }
+
+  // ===== 搜索 / 跳转:核心工具 =====
+  // 正则转义,关键字按字面匹配
+  function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  // 把一章正文里所有命中词包成 mark;第 curN 个标记为 .cur(当前)
+  function highlightBody(text, query) {
+    const re = new RegExp(escRe(query), 'gi');
+    let out = '', last = 0, m, n = 0;
+    while ((m = re.exec(text)) !== null) {
+      out += esc(text.slice(last, m.index));
+      const cls = (n === hitIndex) ? 'hit cur' : 'hit';
+      out += '<mark class="' + cls + '" data-hit="' + n + '">' + esc(m[0]) + '</mark>';
+      last = m.index + m[0].length;
+      n++;
+      if (m.index === re.lastIndex) re.lastIndex++; // 防空匹配死循环
+    }
+    out += esc(text.slice(last));
+    return out;
+  }
+  // 本章命中数
+  function hitCountInChapter(text, query) {
+    if (!query) return 0;
+    const re = new RegExp(escRe(query), 'gi');
+    let c = 0; while (re.exec(text) !== null) { c++; if (re.lastIndex === 0) break; }
+    return c;
+  }
+  // 把第 idx 个命中滚到视口中部
+  function scrollToHit(idx) {
+    const marks = term.querySelectorAll('mark.hit');
+    if (!marks.length) return;
+    marks.forEach(mk => mk.classList.remove('cur'));
+    const target = marks[Math.max(0, Math.min(idx, marks.length - 1))];
+    if (!target) return;
+    target.classList.add('cur');
+    const top = target.offsetTop - term.clientHeight / 2;
+    term.scrollTop = Math.max(0, top);
+  }
+  // 刷新底部提示(把命中计数显示出来)
+  // 底栏:阅读态彻底隐藏(纯键盘命令),面板/伪装态保留简短提示
+  function updateReadingHint() {
+    hint.style.display = 'none';
+  }
+
+  // ===== 跳章面板(g):列出所有章节,输入数字跳/输入文字筛标题 =====
+  function openGoto() {
+    if (!chapters.length) return;
+    if (mode === 'reading') stashReadingPos();
+    panelReturnTo = (mode === 'reading') ? 'reading' : 'disguise';
+    mode = 'panel';
+    let filter = '';
+    let sel = chapterIdx; // 当前高亮选中行
+    // 列表左侧编号:优先显示作者写的真实章号(第N章),没有则用 L+位置(楔子/序章等)
+    function rowLabel(i) {
+      return chapterNos[i] != null ? ('第' + chapterNos[i] + '章') : ('L' + (i + 1));
+    }
+    function rowsHtml() {
+      let list = chapterTitles.map((t, i) => ({ i, t }));
+      const f = filter.trim();
+      if (f) {
+        if (/^\d+$/.test(f)) {
+          const want = parseInt(f, 10);
+          // 先按"作者真实章号"精确匹配;匹配不到再退化为标题文字包含
+          const exact = list.filter(r => chapterNos[r.i] === want);
+          if (exact.length) {
+            list = exact;
+          } else {
+            // 前缀匹配真实章号(如 "2" 匹配 2,20,21...);仍无则按标题含该数字串
+            const byNo = list.filter(r => chapterNos[r.i] != null && String(chapterNos[r.i]).startsWith(f));
+            list = byNo.length ? byNo : list.filter(r => r.t.indexOf(f) >= 0);
+          }
+        } else {
+          const re = new RegExp(escRe(f), 'i');
+          list = list.filter(r => re.test(r.t));
+        }
+      }
+      if (!list.length) return { html: '<div class="grep-empty">无匹配章节</div>', list };
+      if (!list.some(r => r.i === sel)) sel = list[0].i;
+      const isNum = /^\d+$/.test(f);
+      const html = '<div class="goto-list">' + list.map(r => {
+        const now = r.i === chapterIdx ? ' now' : '';
+        const selc = r.i === sel ? ' sel' : '';
+        const title = (f && !isNum) ? markText(r.t, f) : esc(r.t);
+        return '<div class="goto-row' + now + selc + '" data-idx="' + r.i + '">' +
+          '<span class="goto-idx">' + rowLabel(r.i) + '</span>' +
+          '<span class="goto-title">' + title + '</span></div>';
+      }).join('') + '</div>';
+      return { html, list };
+    }
+    function render() {
+      const { html } = rowsHtml();
+      term.innerHTML =
+        '<div>' + PROMPT + '<span class="cmd">cd ./chapters/</span></div>' +
+        '<div class="cmdline">' + PROMPT +
+          '<input class="cinput" id="goto-input" autocomplete="off" spellcheck="false" ' +
+          'placeholder="输入章号(如 28)或章节标题关键字" value="' + esc(filter) + '">' +
+          '<span class="ctip">↑↓ 选择 · 回车跳转 · esc 返回</span>' +
+        '</div>' + html;
+      hint.style.display = '';
+      hint.innerHTML = '<span class="hstat">跳转章节</span><span class="htxt">共 ' +
+        chapters.length + ' 章</span><span class="spacer"></span><span class="act" id="goto-close">← 返回</span>';
+      const gc = document.getElementById('goto-close'); if (gc) gc.onclick = closePanel;
+      const inp = document.getElementById('goto-input');
+      if (inp) {
+        inp.focus();
+        // 光标移到末尾
+        const v = inp.value; inp.value = ''; inp.value = v;
+        inp.oninput = () => { filter = inp.value; sel = -999; render(); };
+      }
+      term.querySelectorAll('.goto-row').forEach(el => {
+        el.onclick = () => jumpToChapter(parseInt(el.getAttribute('data-idx'), 10));
+      });
+    }
+    // 面板内键盘(章号/方向/回车)
+    panelKeyHandler = (e) => {
+      const { list } = rowsHtml();
+      if (e.key === 'Escape') { e.preventDefault(); closePanel(); return; }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const f = filter.trim();
+        if (/^\d+$/.test(f)) {
+          // 数字回车:优先按"作者真实章号"定位;找不到再退化为列表第一项
+          const byNo = indexByChapterNo(parseInt(f, 10));
+          if (byNo >= 0) { jumpToChapter(byNo); return; }
+        }
+        if (list.some(r => r.i === sel)) { jumpToChapter(sel); return; }
+        if (list.length) jumpToChapter(list[0].i);
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const ids = list.map(r => r.i);
+        let p = ids.indexOf(sel);
+        if (p < 0) p = 0;
+        p = (p + (e.key === 'ArrowDown' ? 1 : -1) + ids.length) % ids.length;
+        sel = ids[p];
+        render();
+        const selEl = term.querySelector('.goto-row.sel');
+        if (selEl) selEl.scrollIntoView({ block: 'nearest' });
+      }
+    };
+    render();
+  }
+  function jumpToChapter(idx) {
+    chapterIdx = Math.max(0, Math.min(idx, chapters.length - 1));
+    activeQuery = ''; hitIndex = 0;       // 纯跳章不带高亮
+    pendingScrollRatio = 0;
+    panelKeyHandler = null;
+    renderReading();
+    saveProgressNow();
+  }
+
+  // ===== 全文搜索面板(/):列出所有命中(章+片段),回车跳到该章命中处 =====
+  function openFind() {
+    if (!chapters.length) return;
+    if (mode === 'reading') stashReadingPos();
+    panelReturnTo = (mode === 'reading') ? 'reading' : 'disguise';
+    mode = 'panel';
+    let query = activeQuery || '';
+    let results = [];
+    let sel = 0;
+    function compute() {
+      results = [];
+      const q = query.trim();
+      if (!q) return;
+      const re = new RegExp(escRe(q), 'gi');
+      chapters.forEach((c, ci) => {
+        re.lastIndex = 0;
+        let m, count = 0, firstSnip = '';
+        while ((m = re.exec(c)) !== null) {
+          if (!count) {
+            const s = Math.max(0, m.index - 12);
+            const e = Math.min(c.length, m.index + m[0].length + 24);
+            firstSnip = (s > 0 ? '…' : '') + c.slice(s, e).replace(/\n/g, ' ') + (e < c.length ? '…' : '');
+          }
+          count++;
+          if (m.index === re.lastIndex) re.lastIndex++;
+          if (count > 999) break;
+        }
+        if (count) results.push({ ci, count, snip: firstSnip });
+      });
+    }
+    function render() {
+      compute();
+      const q = query.trim();
+      let listHtml;
+      if (!q) {
+        listHtml = '<div class="grep-empty">输入关键字搜索全文…</div>';
+      } else if (!results.length) {
+        listHtml = '<div class="grep-empty">grep: 未找到 “' + esc(q) + '”</div>';
+      } else {
+        if (sel >= results.length) sel = 0;
+        listHtml = '<div class="grep-list">' + results.map((r, ri) => {
+          const selc = ri === sel ? ' sel' : '';
+          return '<div class="grep-row' + selc + '" data-ri="' + ri + '">' +
+            '<span class="grep-ch">' + (chapterNos[r.ci] != null ? '第' + chapterNos[r.ci] + '章' : 'L' + (r.ci + 1)) + ' (' + r.count + ')</span>' +
+            '<span class="grep-snip">' + markText(r.snip, q) + '</span></div>';
+        }).join('') + '</div>';
+      }
+      const totalHits = results.reduce((a, r) => a + r.count, 0);
+      term.innerHTML =
+        '<div>' + PROMPT + '<span class="cmd">grep -rn "" ./logs/</span></div>' +
+        '<div class="cmdline">' + PROMPT +
+          '<input class="cinput" id="find-input" autocomplete="off" spellcheck="false" ' +
+          'placeholder="输入正文关键字" value="' + esc(query) + '">' +
+          '<span class="ctip">↑↓ 选择 · 回车跳转 · esc 返回</span>' +
+        '</div>' + listHtml;
+      hint.style.display = '';
+      hint.innerHTML = '<span class="hstat">全文搜索</span><span class="htxt">' +
+        (q ? (results.length + ' 章命中 · 共 ' + totalHits + ' 处') : '回车跳到该章命中处') +
+        '</span><span class="spacer"></span><span class="act" id="find-close">← 返回</span>';
+      const fc = document.getElementById('find-close'); if (fc) fc.onclick = closePanel;
+      const inp = document.getElementById('find-input');
+      if (inp) { inp.focus(); const v = inp.value; inp.value = ''; inp.value = v;
+        inp.oninput = () => { query = inp.value; sel = 0; render(); }; }
+      term.querySelectorAll('.grep-row').forEach(el => {
+        el.onclick = () => jumpToResult(results[parseInt(el.getAttribute('data-ri'), 10)], query.trim());
+      });
+    }
+    panelKeyHandler = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closePanel(); return; }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (results.length) jumpToResult(results[sel] || results[0], query.trim());
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (!results.length) return;
+        e.preventDefault();
+        sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length;
+        render();
+        const selEl = term.querySelector('.grep-row.sel');
+        if (selEl) selEl.scrollIntoView({ block: 'nearest' });
+      }
+    };
+    render();
+  }
+  function jumpToResult(r, q) {
+    if (!r) return;
+    chapterIdx = r.ci;
+    activeQuery = q;
+    hitIndex = 0;
+    pendingScrollRatio = 0;
+    panelKeyHandler = null;
+    renderReading();
+    requestAnimationFrame(() => updateReadingHint());
+    saveProgressNow();
+  }
+
+  // 片段里把关键字高亮(用于列表显示)
+  function markText(text, query) {
+    if (!query) return esc(text);
+    const re = new RegExp(escRe(query), 'gi');
+    let out = '', last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      out += esc(text.slice(last, m.index)) + '<mark>' + esc(m[0]) + '</mark>';
+      last = m.index + m[0].length;
+      if (m.index === re.lastIndex) re.lastIndex++;
+    }
+    out += esc(text.slice(last));
+    return out;
+  }
+
+  // 关闭命令面板,回到来源
+  let panelKeyHandler = null;
+  function closePanel() {
+    panelKeyHandler = null;
+    if (panelReturnTo === 'disguise' || !(currentPath || chapters.length)) {
+      renderDisguise();
+    } else {
+      pendingScrollRatio = lastScrollRatio;
+      renderReading();
+      if (activeQuery) requestAnimationFrame(() => updateReadingHint());
+    }
+  }
+
+  // ===== 渲染伪装态:滚动的假 build 日志 =====
+  const services = ['auth-service', 'gateway', 'order-core', 'payment-svc', 'user-api', 'config-server', 'eureka', 'notify-svc'];
+
+  // 模块 -> 它该说的话(按类型绑定,避免"连接池监听端口"这种语义乱配)
+  const moduleActions = {
+    'UserController':       ['mapped {GET /users} route', 'mapped {POST /users} route', 'request handler ready'],
+    'OrderController':      ['mapped {GET /orders} route', 'mapped {POST /orders/create} route', 'request handler ready'],
+    'AuthFilter':          ['security chain initialized', 'JWT filter registered', 'CORS config applied'],
+    'OrderRepository':     ['JPA repository scanned', 'entity OrderEntity mapped', 'query methods generated'],
+    'HikariPool':          ['pool size adjusted to 20', 'connection acquired (3ms)', 'pool stats: active=2 idle=18'],
+    'RedisConnection':     ['connected to 127.0.0.1:6379', 'cache warmed up', 'TTL policy applied'],
+    'KafkaListener':       ['consumer subscribed to topic order-events', 'partitions assigned [0,1,2]', 'offset committed'],
+    'TomcatServer':        ['listening on port 8080', 'context path "/" initialized', 'max-threads set to 200'],
+    'TaskScheduler':       ['cron job registered', 'pool of 5 threads started', 'next fire in 60s'],
+    'TransactionManager':  ['JTA transaction manager ready', 'datasource bound', 'isolation level READ_COMMITTED'],
+  };
+  const moduleNames = Object.keys(moduleActions);
+
+  function nowStr() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+           p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' +
+           String(d.getMilliseconds()).padStart(3, '0');
+  }
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // 用固定宽度的 inline-block 容器装级别名,无论字体是否等宽,[ ] 都严格对齐
+  function tag(level, cls) {
+    return '<span class="lvl ' + cls + '">[<span class="lvltext">' + level + '</span>]</span>';
+  }
+  function makeLogLine() {
+    const r = Math.random();
+    const t = '<span class="log-time">' + nowStr() + '</span> ';
+    if (r < 0.07) {
+      const m = pick(moduleNames);
+      return t + tag('WARN', 'log-warn') + ' ' + m + ' - slow query detected, took ' + (200 + Math.floor(Math.random() * 800)) + 'ms';
+    } else if (r < 0.13) {
+      return t + tag('OK', 'log-ok') + ' ' + pick(services) + ' started in ' + (Math.random() * 4 + 1).toFixed(1) + 's';
+    } else {
+      const m = pick(moduleNames);
+      return t + tag('INFO', 'log-info') + ' ' + m + ' - ' + pick(moduleActions[m]);
+    }
+  }
+
+  function renderDisguise() {
+    mode = 'disguise';
+    term.innerHTML =
+      '<div>' + PROMPT + '<span class="cmd">npm run build && npm run start:prod</span></div>' +
+      '<div class="log-info">> server@1.0.0 build</div>' +
+      '<div class="log-info">> webpack --mode production</div>' +
+      '<div id="logstream"></div>';
+    const stream = document.getElementById('logstream');
+    // 先填满一屏
+    let initial = '';
+    for (let i = 0; i < 40; i++) initial += '<div class="logrow">' + makeLogLine() + '</div>';
+    stream.innerHTML = initial;
+    term.scrollTop = term.scrollHeight;
+    hint.style.display = '';
+    hint.textContent = 'building... — 按空格返回';
+
+    if (disguiseTimer) { clearTimeout(disguiseTimer); disguiseTimer = null; }
+
+    function appendOne() {
+      while (stream.children.length > 200) {
+        const first = stream.firstChild;
+        const h = first.offsetHeight;
+        stream.removeChild(first);
+        term.scrollTop -= h;
+      }
+      const div = document.createElement('div');
+      div.className = 'logrow';
+      div.innerHTML = makeLogLine();
+      stream.appendChild(div);
+      requestAnimationFrame(() => { term.scrollTop = term.scrollHeight; });
+    }
+
+    // 真实构建节奏:大多数行 1~2.2 秒慢慢冒,
+    // 偶尔(约 15%)短暂卡顿后连冒一小簇,模拟某阶段完成时的批量输出
+    function tick() {
+      if (mode !== 'disguise') return;
+      const r = Math.random();
+      if (r < 0.15) {
+        const burst = 2 + Math.floor(Math.random() * 3);
+        let i = 0;
+        const fire = () => {
+          if (mode !== 'disguise') return;
+          appendOne();
+          if (++i < burst) setTimeout(fire, 120 + Math.random() * 150);
+          else disguiseTimer = setTimeout(tick, 1400 + Math.random() * 1600);
+        };
+        fire();
+      } else {
+        appendOne();
+        disguiseTimer = setTimeout(tick, 1000 + Math.random() * 1300);
+      }
+    }
+    disguiseTimer = setTimeout(tick, 900 + Math.random() * 900);
+  }
+
+  // ===== 切换 =====
+  // 仅在"真正阅读态"时,把当前章内位置抓进内存并落盘(不切界面)
+  // 注意:必须 mode==='reading' 才抓,否则书架/伪装的 scrollTop=0 会污染进度
+  function stashReadingPos() {
+    if (mode !== 'reading') return;
+    lastScrollRatio = currentScrollRatio();
+    saveProgressNow();
+  }
+  // 离开阅读态的统一出口:先存位置,再切伪装
+  function leaveReading() {
+    if (mode === 'reading') stashReadingPos();
+    renderDisguise();
+  }
+  function toggle() {
+    if (mode === 'reading') {
+      leaveReading();
+    } else {
+      // 从伪装/书架切回阅读态:恢复最近一次离开阅读态时的章内位置
+      pendingScrollRatio = lastScrollRatio;
+      renderReading();
+    }
+  }
+
+  // ===== 翻页 =====
+  function nextChapter() {
+    if (mode !== 'reading') return;
+    if (chapterIdx < chapters.length - 1) {
+      chapterIdx++;
+      pendingScrollRatio = 0;
+      activeQuery = ''; hitIndex = 0;   // 手动切章清除搜索高亮
+      renderReading();
+      saveProgressNow();
+    }
+  }
+  function prevChapter() {
+    if (mode !== 'reading') return;
+    if (chapterIdx > 0) {
+      chapterIdx--;
+      pendingScrollRatio = 0;
+      activeQuery = ''; hitIndex = 0;   // 手动切章清除搜索高亮
+      renderReading();
+      saveProgressNow();
+    }
+  }
+  function scrollPage(dir) {
+    term.scrollTop += dir * (term.clientHeight - 60);
+    saveProgressDebounced();
+  }
+
+  // ===== 用一份加载结果套用到界面 =====
+  function applyLoaded(res, restore) {
+    chapters = splitChapters(res.content); rebuildTitles();
+    novelName = res.name.replace(/\.txt$/i, '.log');
+    currentPath = res.path;
+    importedOnce = true;
+    chapterIdx = restore && res.saved ? Math.min(res.saved.chapterIdx || 0, chapters.length - 1) : 0;
+    pendingScrollRatio = restore && res.saved ? (res.saved.scrollRatio || 0) : 0;
+    mode = 'reading';
+    renderReading();
+  }
+
+  // ===== 导入小说(弹框)=====
+  async function importNovel() {
+    const res = await window.api.openNovel();
+    if (res) applyLoaded(res, true);  // 同一本书再次导入也会接着上次进度
+  }
+
+  // ===== 书架:列出所有读过的书,可切换/移除 =====
+  async function showShelf() {
+    // 进书架前:若当前在阅读态,先把章内位置存好(否则书架的 scrollTop=0 会顶掉进度)
+    const cameFromReading = (mode === 'reading');
+    if (cameFromReading) stashReadingPos();
+    shelfReturnTo = cameFromReading ? 'reading' : (mode === 'disguise' ? 'disguise' : shelfReturnTo);
+    mode = 'shelf';   // 独立态:scroll 监听不再误存进度
+    const state = await window.api.getState();
+    const books = state.books || [];
+    let rows;
+    if (books.length === 0) {
+      rows = '<div class="shelf-empty">书架空空如也 — 先导入一本 txt 吧</div>';
+    } else {
+      rows = books.map((b) => {
+        const pct = Math.round((b.scrollRatio || 0) * 100);
+        const miss = b.exists ? '' : ' <span class="shelf-miss">(文件已移动)</span>';
+        return '<div class="shelf-item" data-path="' + esc(b.path) + '" data-exists="' + b.exists + '">' +
+          '<span class="shelf-name">' + esc(b.name) + miss + '</span>' +
+          '<span class="shelf-prog">第' + ((b.chapterIdx || 0) + 1) + '章 · ' + pct + '%</span>' +
+          '<span class="shelf-del" data-del="' + esc(b.path) + '">✕</span>' +
+          '</div>';
+      }).join('');
+    }
+    term.innerHTML =
+      '<div>' + PROMPT + '<span class="cmd">ls ~/.local/share/logs/</span></div>' +
+      '<div class="shelf">' + rows + '</div>' +
+      '<div class="shelf-foot"><span class="act" id="shelf-import">＋ 导入新的 txt</span>　<span class="act" id="shelf-back">← 返回</span></div>';
+    hint.style.display = '';
+    hint.innerHTML = '<span>书架 · 共 ' + books.length + ' 本</span><span class="spacer"></span><span>点书名打开 · ✕ 移除</span>';
+    // 绑定
+    term.querySelectorAll('.shelf-item').forEach((el) => {
+      el.querySelector('.shelf-name').onclick = async () => {
+        const p = el.getAttribute('data-path');
+        const res = await window.api.loadByPath(p);
+        if (res && res.missing) {
+          el.querySelector('.shelf-name').innerHTML += ' <span class="shelf-miss">读取失败,请重新导入</span>';
+        } else {
+          applyLoaded(res, true);
+        }
+      };
+      const del = el.querySelector('.shelf-del');
+      if (del) del.onclick = async (ev) => {
+        ev.stopPropagation();
+        await window.api.removeBook(del.getAttribute('data-del'));
+        showShelf();
+      };
+    });
+    const si = document.getElementById('shelf-import');
+    if (si) si.onclick = importNovel;
+    const sb = document.getElementById('shelf-back');
+    if (sb) sb.onclick = exitShelf;
+  }
+
+  // 退出书架:按"进书架前的来源"回去,并在回阅读态时恢复章内位置
+  function exitShelf() {
+    if (shelfReturnTo === 'disguise' || !(currentPath || chapters.length)) {
+      renderDisguise();
+    } else {
+      pendingScrollRatio = lastScrollRatio;   // 回阅读态:恢复进书架前的位置
+      renderReading();
+    }
+  }
+
+  // ===== 键盘 =====
+  document.addEventListener('keydown', (e) => {
+    // 命令面板(跳章/搜索)态:输入框在焦点,交给面板自己的处理器
+    if (mode === 'panel') {
+      if (panelKeyHandler) panelKeyHandler(e);
+      return;
+    }
+    // 空格:核心老板键
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (mode === 'shelf') exitShelf();   // 在书架按空格:回到来源(阅读则恢复位置)
+      else toggle();                        // 阅读/伪装互切
+      return;
+    }
+    if (mode === 'reading') {
+      if (e.key === 'g') { e.preventDefault(); openGoto(); return; }
+      if (e.key === '/') { e.preventDefault(); openFind(); return; }
+      if (e.code === 'ArrowDown' || e.key === 'j') { e.preventDefault(); scrollPage(1); }
+      else if (e.code === 'ArrowUp' || e.key === 'k') { e.preventDefault(); scrollPage(-1); }
+      else if (e.code === 'ArrowRight' || e.key === 'l') { e.preventDefault(); nextChapter(); }
+      else if (e.code === 'ArrowLeft' || e.key === 'h' || e.key === 'p') { e.preventDefault(); prevChapter(); }
+      else if (e.key === 'o') { e.preventDefault(); importNovel(); }
+      else if (e.key === 'b') { e.preventDefault(); showShelf(); }
+    }
+    // ESC:
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (mode === 'shelf') exitShelf();   // 书架 esc:回到来源,阅读态恢复位置(不丢位置)
+      else if (mode === 'reading' && activeQuery) { // 阅读态有高亮:先清高亮,不退出
+        activeQuery = ''; hitIndex = 0; renderReading();
+      }
+      else leaveReading();                  // 阅读 esc:存位置后进伪装
+    }
+  });
+
+  // 鼠标滚轮也算阅读,触发防抖保存
+  term.addEventListener('scroll', () => { if (mode === 'reading') saveProgressDebounced(); });
+  // 关窗/刷新前最后补存一次
+  window.addEventListener('beforeunload', saveProgressNow);
+
+  // ===== 主进程信号 =====
+  window.api.onToggleState(() => toggle());
+  window.api.onForceDisguise(() => { leaveReading(); });
+
+  // ===== 启动:默认伪装态(开机即安全),后台尝试恢复上次的书 =====
+  // 不内置任何示例文案;没导入书时阅读态显示引导提示
+  chapters = []; rebuildTitles();
+  renderDisguise();
+  (async () => {
+    try {
+      const state = await window.api.getState();
+      if (state && state.lastFile) {
+        const res = await window.api.loadByPath(state.lastFile);
+        if (res && !res.missing) {
+          // 仅在内存里准备好上次的书与进度,但保持伪装态不动;
+          // 用户按空格切到阅读态时,立刻就是上次读到的位置
+          chapters = splitChapters(res.content); rebuildTitles();
+          novelName = res.name.replace(/\.txt$/i, '.log');
+          currentPath = res.path;
+          importedOnce = true;
+          chapterIdx = res.saved ? Math.min(res.saved.chapterIdx || 0, chapters.length - 1) : 0;
+          pendingScrollRatio = res.saved ? (res.saved.scrollRatio || 0) : 0;
+        }
+      }
+    } catch (e) {}
+  })();
+})();
+</script>
+</body>
+</html>
