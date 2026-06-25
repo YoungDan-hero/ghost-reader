@@ -227,7 +227,7 @@ ipcMain.on('set-ghost', (e, on) => {
 });
 
 // 屏幕取色:读取当前鼠标所在屏幕位置的像素颜色
-// 用法:渲染层把鼠标移到目标位置后调 pickColor,返回 #rrggbb
+// 返回 { hex: '#rrggbb' } 或 { error: 'permission' | 'empty' | 错误描述 }
 ipcMain.handle('pick-color', async () => {
   try {
     const cursor = screen.getCursorScreenPoint();
@@ -240,25 +240,31 @@ ipcMain.handle('pick-color', async () => {
         height: Math.floor(display.size.height * sf),
       },
     });
-    // 找到对应这块屏的 source;display_id 可能是字符串
+    if (!sources || sources.length === 0) {
+      // macOS 屏幕录制权限未授予
+      return { error: 'permission' };
+    }
     const src = sources.find(s => s.display_id === String(display.id)) || sources[0];
-    if (!src) return null;
+    if (!src) return { error: 'empty' };
     const img = nativeImage.createFromBuffer(src.thumbnail.toPNG());
-    // 缩略图实际尺寸(display.size * sf)
     const w = img.getSize().width;
     const h = img.getSize().height;
     const sx = w / (display.size.width * sf);
     const sy = h / (display.size.height * sf);
-    // 鼠标相对该屏原点的坐标,换算到缩略图像素坐标
     const px = Math.max(0, Math.min(w - 1, Math.floor((cursor.x - display.bounds.x) * sf * sx)));
     const py = Math.max(0, Math.min(h - 1, Math.floor((cursor.y - display.bounds.y) * sf * sy)));
-    const color = img.getPixel(px, py); // [r,g,b,a] 0-255
-    if (!color || color.length < 3) return null;
-    const hex = '#' + [color[0], color[1], color[2]]
+    // 用 toBitmap() 取原始像素数据 (每像素 4 字节 BGRA)
+    const buf = img.toBitmap();
+    const stride = w * 4; // 每行字节数
+    if (!buf || buf.length < py * stride + px * 4 + 3) return { error: 'pixel' };
+    const offset = py * stride + px * 4;
+    // BGRA 格式: [B, G, R, A]
+    const b = buf[offset], g = buf[offset + 1], r = buf[offset + 2];
+    const hex = '#' + [r, g, b]
       .map(n => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0'))
       .join('');
-    return hex;
+    return { hex };
   } catch (err) {
-    return null;
+    return { error: String(err) };
   }
 });

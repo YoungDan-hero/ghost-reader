@@ -371,15 +371,24 @@
   // 取色:读取当前鼠标所在屏幕位置的像素颜色,一键完成
   async function pickColor() {
     if (!window.api || !window.api.pickColor) return;
-    const hex = await window.api.pickColor();
-    if (!hex) return;
-    ghostStyle.color = hex;
+    showColorToast(null, '取色中…');
+    const res = await window.api.pickColor();
+    if (!res) { showColorToast(null, '取色失败'); return; }
+    if (res.error) {
+      let msg;
+      if (res.error === 'permission') msg = '需要屏幕录制权限:系统设置→隐私与安全→屏幕录制→允许 Terminal';
+      else msg = '取色失败: ' + res.error;
+      showColorToast(null, msg);
+      return;
+    }
+    if (!res.hex) { showColorToast(null, '取色失败'); return; }
+    ghostStyle.color = res.hex;
     applyGhostStyle();
     saveGhostStyle();
-    showColorToast(hex);
+    showColorToast(res.hex);
   }
-  // 取色成功提示气泡
-  function showColorToast(hex) {
+  // 取色提示气泡:有 hex 显示色块+色值,无 hex 显示 msg
+  function showColorToast(hex, msg) {
     let t = document.getElementById('color-toast');
     if (!t) {
       t = document.createElement('div');
@@ -387,10 +396,14 @@
       t.className = 'color-toast';
       document.body.appendChild(t);
     }
-    t.innerHTML = '<span class="swatch" style="background:' + hex + '"></span>已取色 ' + hex;
+    if (hex) {
+      t.innerHTML = '<span class="swatch" style="background:' + hex + '"></span>已取色 ' + hex;
+    } else {
+      t.innerHTML = '<span style="opacity:0.8">' + esc(msg || '取色失败') + '</span>';
+    }
     t.classList.add('show');
     clearTimeout(t._timer);
-    t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+    t._timer = setTimeout(() => t.classList.remove('show'), msg ? 4000 : 2000);
   }
   // ghost 字号/行高/字间距调整
   function adjustGhost(prop, delta) {
@@ -1070,6 +1083,12 @@
     // 空格:核心老板键
     if (e.code === 'Space') {
       e.preventDefault();
+      if (ghostMode) {
+        // ghost 模式按空格:先退幽灵,再切伪装态(避免 renderDisguise 销毁 .novel-body 丢样式)
+        applyGhost(false);
+        if (mode === 'reading') leaveReading();
+        return;
+      }
       if (mode === 'shelf') exitShelf();   // 在书架按空格:回到来源(阅读则恢复位置)
       else toggle();                        // 阅读/伪装互切
       return;
@@ -1088,8 +1107,8 @@
     }
     // ===== ghost 模式专属:文字样式调整 =====
     if (ghostMode) {
-      // c:一键取当前鼠标位置颜色(鼠标移到目标文字上,按 c 即取)
-      if (e.key === 'c') {
+      // c:一键取当前鼠标位置颜色(大小写兼容)
+      if (e.key === 'c' || e.key === 'C') {
         e.preventDefault();
         pickColor();
         return;
