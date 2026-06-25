@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('api', {
   removeBook: (p) => ipcRenderer.invoke('remove-book', p),
   quit: () => ipcRenderer.send('quit-app'),
   minimize: () => ipcRenderer.send('minimize-app'),
+  setGhost: (on) => ipcRenderer.send('set-ghost', on),
+  pickColor: () => ipcRenderer.invoke('pick-color'),
   onToggleState: (cb) => ipcRenderer.on('toggle-state', cb),
   onForceDisguise: (cb) => ipcRenderer.on('force-disguise', cb),
+  onPickColorNow: (cb) => ipcRenderer.on('pick-color-now', cb),
 });

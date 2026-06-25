@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, dialog, screen, desktopCapturer, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -50,7 +50,9 @@ function createWindow() {
     minWidth: 120,    // 允许极度缩小,只剩标题栏也能缩
     minHeight: 30,    // 仅标题栏高度,几乎贴底
     title: 'Terminal',
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#00000000', // 透明:允许 ghost 模式把背景完全藏掉
+    transparent: true,            // 窗口透明(创建时设定,不可运行时切换)
+    hasShadow: true,              // 正常态保留阴影更像真窗口;ghost 态关掉
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 9 },
     skipTaskbar: true,
@@ -64,11 +66,31 @@ function createWindow() {
   win.loadFile('index.html');
 
   // 失焦自动切到伪装态(领导路过点了别处也安全)
+  // ghost(幽灵悬浮)模式下不切:用户故意让文字悬浮在别的窗口上,失焦是常态
   win.on('blur', () => {
-    if (win && !win.isDestroyed()) {
+    if (win && !win.isDestroyed() && !ghostMode) {
       win.webContents.send('force-disguise');
     }
   });
+}
+
+// ghost(幽灵悬浮)模式:隐藏标题栏红黄绿 / 阴影,渲染层把背景设透明
+// 效果:只剩几行小说文字悬浮在桌面上,可拖到任何文档上"融为一体"
+let ghostMode = false;
+function setGhostMode(on) {
+  ghostMode = on;
+  if (!win || win.isDestroyed()) return;
+  win.setHasShadow(!on);
+  // 隐藏/显示左上角红黄绿按钮(macOS)
+  try { win.setWindowButtonVisibility(!on); } catch (e) {}
+  // ghost 模式下注册全局取色快捷键;退出时注销
+  if (on) {
+    globalShortcut.register('CommandOrControl+Shift+C', () => {
+      if (win && !win.isDestroyed()) win.webContents.send('pick-color-now');
+    });
+  } else {
+    globalShortcut.unregister('CommandOrControl+Shift+C');
+  }
 }
 
 app.whenReady().then(() => {
@@ -197,4 +219,46 @@ ipcMain.on('quit-app', () => app.quit());
 // 最小化
 ipcMain.on('minimize-app', () => {
   if (win && !win.isDestroyed()) win.minimize();
+});
+
+// 幽灵悬浮模式:隐藏窗口装饰,只剩文字
+ipcMain.on('set-ghost', (e, on) => {
+  setGhostMode(!!on);
+});
+
+// 屏幕取色:读取当前鼠标所在屏幕位置的像素颜色
+// 用法:渲染层把鼠标移到目标位置后调 pickColor,返回 #rrggbb
+ipcMain.handle('pick-color', async () => {
+  try {
+    const cursor = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursor);
+    const sf = display.scaleFactor || 1;
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: {
+        width: Math.floor(display.size.width * sf),
+        height: Math.floor(display.size.height * sf),
+      },
+    });
+    // 找到对应这块屏的 source;display_id 可能是字符串
+    const src = sources.find(s => s.display_id === String(display.id)) || sources[0];
+    if (!src) return null;
+    const img = nativeImage.createFromBuffer(src.thumbnail.toPNG());
+    // 缩略图实际尺寸(display.size * sf)
+    const w = img.getSize().width;
+    const h = img.getSize().height;
+    const sx = w / (display.size.width * sf);
+    const sy = h / (display.size.height * sf);
+    // 鼠标相对该屏原点的坐标,换算到缩略图像素坐标
+    const px = Math.max(0, Math.min(w - 1, Math.floor((cursor.x - display.bounds.x) * sf * sx)));
+    const py = Math.max(0, Math.min(h - 1, Math.floor((cursor.y - display.bounds.y) * sf * sy)));
+    const color = img.getPixel(px, py); // [r,g,b,a] 0-255
+    if (!color || color.length < 3) return null;
+    const hex = '#' + [color[0], color[1], color[2]]
+      .map(n => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0'))
+      .join('');
+    return hex;
+  } catch (err) {
+    return null;
+  }
 });

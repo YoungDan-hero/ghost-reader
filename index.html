@@ -223,6 +223,60 @@
   .goto-idx { color: var(--muted); flex: 0 0 auto; min-width: 44px; font-size: 12px; }
   .goto-title { color: var(--link); flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .goto-row .goto-title mark { background: var(--hit-bg); color: var(--hit-fg); }
+
+  /* ===== 幽灵悬浮模式(ghost):窗口装饰全隐,只剩文字悬浮在桌面上 =====
+     设计:背景透明、标题栏/底栏/prompt 行/open 命令全部隐藏,
+     只保留 .novel-body 正文。文字颜色按主题自适应,在任意文档上都能融入。
+     拖动:正文区域设为 drag 区,鼠标按住文字空白处可拖窗口。 */
+  /* html + body + #term 三层背景全清,彻底透明 */
+  html.ghost, body.ghost {
+    background: transparent !important;
+  }
+  body.ghost #titlebar,
+  body.ghost .hint {
+    display: none !important;
+  }
+  body.ghost #term {
+    background: transparent !important;
+    height: 100vh;
+    padding: 4px 12px 4px 12px;
+    /* ghost 下正文可拖动窗口 */
+    -webkit-app-region: drag;
+  }
+  /* 正文文字区设为 no-drag:滚轮和文字选择正常生效;
+     #term 的 padding/行间空白仍是 drag 区,可拖动窗口 */
+  body.ghost .novel-body {
+    -webkit-app-region: no-drag;
+    /* ghost 默认纯黑:悬浮在任意浅色文档上都是正常文字色,不偏色 */
+    color: #000000;
+    text-shadow: none;
+  }
+  /* 取色模式准备中:鼠标变十字提示用户 */
+  body.ghost.picking #term { cursor: crosshair; }
+  /* 取色成功提示:右下角小气泡,2秒淡出 */
+  .color-toast {
+    position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+    background: rgba(0,0,0,0.75); color: #fff; font-size: 12px;
+    padding: 5px 10px; border-radius: 4px; pointer-events: none;
+    opacity: 0; transition: opacity 0.3s;
+    font-family: "SF Mono", monospace;
+  }
+  .color-toast.show { opacity: 1; }
+  .color-toast .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; border: 1px solid rgba(255,255,255,0.3); }
+  /* 深色主题下 ghost 默认改为白色文字(深底文档用),取色器可覆盖 */
+  body.ghost[data-theme="dark"] .novel-body {
+    color: #ffffff;
+    text-shadow: none;
+  }
+  /* ghost 下隐藏顶部 open 命令行和底部 prompt+光标行,只留正文 */
+  body.ghost .open-cmd,
+  body.ghost #term > div:last-child {
+    display: none !important;
+  }
+  /* ghost 下搜索高亮仍可用 */
+  body.ghost mark.hit {
+    text-shadow: none;
+  }
 </style>
 </head>
 <body>
@@ -253,6 +307,16 @@
   let activeQuery = '';         // 进入某章后要在正文里高亮的词(空=不高亮)
   let hitIndex = 0;             // n/N 在本章命中之间跳转的游标
   let panelReturnTo = 'reading';// 退出命令面板回到哪里
+  let ghostMode = false;        // 幽灵悬浮:窗口装饰全隐,只剩文字悬浮
+  // ghost 模式下文字样式(字号/行高/字间距/颜色),持久化到 localStorage
+  let ghostStyle = { fontSize: 13.5, lineHeight: 1.6, letterSpacing: 0, color: null };
+  (function initGhostStyle() {
+    try {
+      const s = localStorage.getItem('ghost-style');
+      if (s) ghostStyle = Object.assign(ghostStyle, JSON.parse(s));
+    } catch (e) {}
+  })();
+  let pickingColor = false;     // 保留兼容(不再两步,但留标志防重复)
 
   // ===== 主题切换(dark / light)=====
   function applyTheme(t) {
@@ -269,6 +333,76 @@
     try { saved = localStorage.getItem('theme') || 'dark'; } catch (e) {}
     applyTheme(saved);
   })();
+
+  // ===== 幽灵悬浮模式(ghost):窗口边框/标题栏/底色全隐,只剩文字 =====
+  function applyGhost(on) {
+    ghostMode = on;
+    // html + body 同步加 ghost 类,确保 html 的 background 也被清掉
+    document.documentElement.classList.toggle('ghost', on);
+    document.body.classList.toggle('ghost', on);
+    if (window.api && window.api.setGhost) window.api.setGhost(on);
+    if (on) applyGhostStyle();
+  }
+  function toggleGhost() {
+    const next = !ghostMode;
+    if (next && mode !== 'reading') {
+      // 进入 ghost 前若不在阅读态,先切到阅读(ghost 主要为阅读服务)
+      if (mode === 'panel') { closePanel(); }
+      else if (mode === 'shelf') { exitShelf(); }
+      // 切换后异步开 ghost,确保 renderReading 先渲染好正文
+      setTimeout(() => applyGhost(true), 30);
+    } else {
+      applyGhost(next);
+    }
+  }
+  // 把 ghost 文字样式套到正文(ghost 模式下实时生效)
+  function applyGhostStyle() {
+    const body = term.querySelector('.novel-body');
+    if (!body) return;
+    body.style.fontSize = ghostStyle.fontSize + 'px';
+    body.style.lineHeight = ghostStyle.lineHeight;
+    body.style.letterSpacing = ghostStyle.letterSpacing + 'px';
+    body.style.color = ghostStyle.color || '';
+    body.style.textShadow = ghostStyle.color ? 'none' : '';
+  }
+  function saveGhostStyle() {
+    try { localStorage.setItem('ghost-style', JSON.stringify(ghostStyle)); } catch (e) {}
+  }
+  // 取色:读取当前鼠标所在屏幕位置的像素颜色,一键完成
+  async function pickColor() {
+    if (!window.api || !window.api.pickColor) return;
+    const hex = await window.api.pickColor();
+    if (!hex) return;
+    ghostStyle.color = hex;
+    applyGhostStyle();
+    saveGhostStyle();
+    showColorToast(hex);
+  }
+  // 取色成功提示气泡
+  function showColorToast(hex) {
+    let t = document.getElementById('color-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'color-toast';
+      t.className = 'color-toast';
+      document.body.appendChild(t);
+    }
+    t.innerHTML = '<span class="swatch" style="background:' + hex + '"></span>已取色 ' + hex;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+  }
+  // ghost 字号/行高/字间距调整
+  function adjustGhost(prop, delta) {
+    ghostStyle[prop] = +(ghostStyle[prop] + delta).toFixed(2);
+    applyGhostStyle();
+    saveGhostStyle();
+  }
+  function resetGhostStyle() {
+    ghostStyle = { fontSize: 13.5, lineHeight: 1.6, letterSpacing: 0, color: null };
+    applyGhostStyle();
+    saveGhostStyle();
+  }
 
   // ===== 进度保存(防抖 + 立即两种)=====
   function currentScrollRatio() {
@@ -946,6 +1080,32 @@
       toggleTheme();
       return;
     }
+    // v:幽灵悬浮模式(窗口装饰全隐,只剩文字悬浮)
+    if (e.key === 'v') {
+      e.preventDefault();
+      toggleGhost();
+      return;
+    }
+    // ===== ghost 模式专属:文字样式调整 =====
+    if (ghostMode) {
+      // c:一键取当前鼠标位置颜色(鼠标移到目标文字上,按 c 即取)
+      if (e.key === 'c') {
+        e.preventDefault();
+        pickColor();
+        return;
+      }
+      // 字号:+/- 或 =/_
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); adjustGhost('fontSize', 0.5); return; }
+      if (e.key === '-' || e.key === '_') { e.preventDefault(); adjustGhost('fontSize', -0.5); return; }
+      // 行高:[ ]
+      if (e.key === '[') { e.preventDefault(); adjustGhost('lineHeight', -0.1); return; }
+      if (e.key === ']') { e.preventDefault(); adjustGhost('lineHeight', 0.1); return; }
+      // 字间距:, .
+      if (e.key === ',') { e.preventDefault(); adjustGhost('letterSpacing', -0.3); return; }
+      if (e.key === '.') { e.preventDefault(); adjustGhost('letterSpacing', 0.3); return; }
+      // 重置:0
+      if (e.key === '0') { e.preventDefault(); resetGhostStyle(); return; }
+    }
     if (mode === 'reading') {
       if (e.key === 'g') { e.preventDefault(); openGoto(); return; }
       if (e.key === '/') { e.preventDefault(); openFind(); return; }
@@ -959,6 +1119,7 @@
     // ESC:
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (ghostMode) { applyGhost(false); return; }   // ghost 态 esc:先退出幽灵
       if (mode === 'shelf') exitShelf();   // 书架 esc:回到来源,阅读态恢复位置(不丢位置)
       else if (mode === 'reading' && activeQuery) { // 阅读态有高亮:先清高亮,不退出
         activeQuery = ''; hitIndex = 0; renderReading();
@@ -973,8 +1134,22 @@
   window.addEventListener('beforeunload', saveProgressNow);
 
   // ===== 主进程信号 =====
-  window.api.onToggleState(() => toggle());
-  window.api.onForceDisguise(() => { leaveReading(); });
+  // 全局老板键:ghost 下先退幽灵,再正常 toggle(切到伪装最安全)
+  window.api.onToggleState(() => {
+    if (ghostMode) { applyGhost(false); }
+    toggle();
+  });
+  // 失焦强制伪装(主进程在 ghost 下已不发送,这里兜底)
+  window.api.onForceDisguise(() => {
+    if (ghostMode) { applyGhost(false); return; }
+    leaveReading();
+  });
+  // 全局取色快捷键(Cmd+Shift+C):ghost 下任何时候都能取色,不依赖窗口焦点
+  if (window.api.onPickColorNow) {
+    window.api.onPickColorNow(() => {
+      if (ghostMode) pickColor();
+    });
+  }
 
   // ===== 启动:默认伪装态(开机即安全),后台尝试恢复上次的书 =====
   // 不内置任何示例文案;没导入书时阅读态显示引导提示
