@@ -8,7 +8,9 @@
     "start": "electron .",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "dmg": "electron-builder --mac dmg"
+    "dmg": "electron-builder --mac dmg",
+    "win": "electron-builder --win nsis --x64",
+    "all": "electron-builder --mac dmg --win nsis --arm64 --x64"
   },
   "author": "yangdan",
   "license": "MIT",
@@ -19,7 +21,6 @@
   "build": {
     "appId": "com.yangdan.ghostreader",
     "productName": "GhostReader",
-    "icon": "build/GhostReader.icns",
     "directories": {
       "output": "release"
     },
@@ -29,6 +30,7 @@
       "index.html"
     ],
     "mac": {
+      "icon": "build/GhostReader.icns",
       "category": "public.app-category.utilities",
       "target": [
         {
@@ -44,6 +46,22 @@
     },
     "dmg": {
       "title": "GhostReader"
+    },
+    "win": {
+      "icon": "build/GhostReader.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/GhostReader.ico",
+      "uninstallerIcon": "build/GhostReader.ico"
     }
   }
 }

@@ -100,25 +100,34 @@ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
 ## 构建打包
 
 ```bash
-# 生成 .app（不打包 dmg，构建快）
+# 生成 macOS .app（不打包 dmg，构建快）
 npm run pack
 
-# 生成可分发的 .dmg
+# 生成可分发的 macOS .dmg
 npm run dmg
+
+# 生成 Windows 安装包 .exe
+npm run win
+
+# 一次构建 macOS + Windows 两个平台
+npm run all
 ```
 
 产物输出在 `release/` 目录：
 
-- `release/GhostReader-x.y.z-arm64.dmg` —— 分发安装包
-- `release/mac-arm64/GhostReader.app` —— 可直接双击运行
+- `release/GhostReader-x.y.z-arm64.dmg` —— macOS 分发安装包
+- `release/mac-arm64/GhostReader.app` —— macOS 可直接双击运行
+- `release/GhostReader Setup x.y.z.exe` —— Windows 安装包
 
 > 国内打包加镜像：
 >
 > ```bash
 > ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
 > ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
->   npm run dmg
+>   npm run all
 > ```
+>
+> 在 macOS 上交叉编译 Windows 版本时，electron-builder 会自动下载 wine 来打包 .exe，首次构建会多花几分钟下载工具链。
 
 ## 数据与隐私
 
@@ -149,9 +158,12 @@ npm run dmg
 
 ## 兼容性
 
-当前打包目标为 **macOS · Apple Silicon (arm64)**。如需 Intel (x64) 或 Windows，可在 `package.json` 的 `build.mac.target` / 新增 `build.win` 中扩展架构后重新打包。
+- **macOS · Apple Silicon (arm64)** —— `.dmg` 安装包，Ghost Mode 效果最佳。
+- **Windows · x64** —— `.exe` 安装包（NSIS），支持自定义安装路径。Ghost Mode 透明窗口在 Windows 上同样可用。
 
-> Ghost Mode 的透明窗口在 macOS 上效果最佳。Windows / Linux 透明窗口行为略有差异，需额外适配。
+如需 Intel Mac (x64) 版本，在 `package.json` 的 `build.mac.target.arch` 中加入 `"x64"` 后重新打包。
+
+> Ghost Mode 的透明窗口依赖系统合成器。macOS 和 Windows 10+ 均完整支持；部分 Linux 桌面环境（如 X11）透明窗口行为有差异，需额外适配。
 
 ## 免责声明
 

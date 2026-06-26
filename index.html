@@ -98,6 +98,28 @@
     font-size: 12px;
     letter-spacing: 0.3px;
   }
+  /* Windows 自绘窗口按钮(最小化/关闭):macOS 用原生红黄绿,隐藏此组 */
+  .win-controls {
+    display: none;                /* 默认隐藏,macOS 不需要 */
+    -webkit-app-region: no-drag;  /* 按钮区不拖动 */
+    margin-left: 8px;
+  }
+  body.win .win-controls { display: flex; gap: 0; }
+  .win-controls button {
+    width: 36px; height: 30px;
+    border: none; background: transparent;
+    color: var(--title-text);
+    font-size: 16px; line-height: 1;
+    cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.12s;
+  }
+  .win-controls button:hover { background: rgba(255,255,255,0.12); }
+  .win-controls button.close:hover { background: #e81123; color: #fff; }
+  body.win #titlebar { padding: 0 0 0 12px; }  /* Win 无红黄绿,左边不留空 */
+  /* 浅色主题下 hover 色调暗 */
+  body.win[data-theme="light"] .win-controls button:hover { background: rgba(0,0,0,0.08); }
+  body.win[data-theme="light"] .win-controls button.close:hover { background: #e81123; color: #fff; }
   #term {
     height: calc(100% - 30px);
     padding: 10px 16px 40px;
@@ -282,6 +304,10 @@
 <body>
   <div id="titlebar">
     <div id="title-text">yangdan — -bash — 90×24</div>
+    <div class="win-controls">
+      <button id="win-min" title="最小化">–</button>
+      <button id="win-close" class="close" title="关闭">×</button>
+    </div>
   </div>
   <div id="term"></div>
   <div class="hint" id="hint"></div>
@@ -1153,6 +1179,15 @@
   term.addEventListener('scroll', () => { if (mode === 'reading') saveProgressDebounced(); });
   // 关窗/刷新前最后补存一次
   window.addEventListener('beforeunload', saveProgressNow);
+
+  // ===== Windows 平台:自绘窗口按钮(macOS 用原生红黄绿) =====
+  if (window.api && window.api.platform === 'win32') {
+    document.body.classList.add('win');
+    const minBtn = document.getElementById('win-min');
+    const closeBtn = document.getElementById('win-close');
+    if (minBtn) minBtn.onclick = () => window.api.minimize && window.api.minimize();
+    if (closeBtn) closeBtn.onclick = () => window.api.quit && window.api.quit();
+  }
 
   // ===== 主进程信号 =====
   // 全局老板键:ghost 下先退幽灵,再正常 toggle(切到伪装最安全)

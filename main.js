@@ -58,6 +58,7 @@ function readNovelFile(filePath) {
 }
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
   win = new BrowserWindow({
     width: 900,
     height: 560,
@@ -67,9 +68,13 @@ function createWindow() {
     backgroundColor: '#00000000', // 透明:允许 ghost 模式把背景完全藏掉
     transparent: true,            // 窗口透明(创建时设定,不可运行时切换)
     hasShadow: true,              // 正常态保留阴影更像真窗口;ghost 态关掉
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 12, y: 9 },
+    // macOS 用 hiddenInset 保留红黄绿;Windows 用 hidden 自绘标题栏更干净
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    // macOS:红黄绿按钮位置;Windows 无此属性,自动忽略
+    trafficLightPosition: isMac ? { x: 12, y: 9 } : undefined,
     skipTaskbar: true,
+    // Windows 透明窗口需要 frame:false 才能完全无边框(macOS titleBarStyle 已处理)
+    frame: isMac ? undefined : false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -95,8 +100,10 @@ function setGhostMode(on) {
   ghostMode = on;
   if (!win || win.isDestroyed()) return;
   win.setHasShadow(!on);
-  // 隐藏/显示左上角红黄绿按钮(macOS)
-  try { win.setWindowButtonVisibility(!on); } catch (e) {}
+  // 隐藏/显示左上角红黄绿按钮(仅 macOS 有此 API,Windows 用 frame:false 已无边框)
+  if (process.platform === 'darwin') {
+    try { win.setWindowButtonVisibility(!on); } catch (e) {}
+  }
   // ghost 模式下注册全局取色快捷键;退出时注销
   if (on) {
     globalShortcut.register('CommandOrControl+Shift+C', () => {

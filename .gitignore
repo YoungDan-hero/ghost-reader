@@ -6,7 +6,7 @@ release/
 dist/
 out/
 
-# Icon source (keep .icns only)
+# Icon source (keep .icns/.ico only)
 build/*.png
 build/*.iconset/
 

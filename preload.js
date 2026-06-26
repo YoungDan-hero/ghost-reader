@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
+  platform: process.platform, // 'darwin' | 'win32' | 'linux'
   openNovel: () => ipcRenderer.invoke('open-novel'),
   loadByPath: (p) => ipcRenderer.invoke('load-novel-by-path', p),
   getState: () => ipcRenderer.invoke('get-state'),
