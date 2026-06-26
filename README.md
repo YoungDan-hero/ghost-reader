@@ -109,8 +109,8 @@ npm run dmg
 
 产物输出在 `release/` 目录：
 
-- `release/Ghost-x.y.z-arm64.dmg` —— 分发安装包
-- `release/mac-arm64/Ghost.app` —— 可直接双击运行
+- `release/GhostReader-x.y.z-arm64.dmg` —— 分发安装包
+- `release/mac-arm64/GhostReader.app` —— 可直接双击运行
 
 > 国内打包加镜像：
 >
@@ -122,7 +122,7 @@ npm run dmg
 
 ## 数据与隐私
 
-- 阅读进度、书架、Ghost 样式仅保存在本机（macOS：`~/Library/Application Support/Terminal/`）。
+- 阅读进度、书架、Ghost 样式仅保存在本机（macOS：`~/Library/Application Support/GhostReader/`）。
 - **只记录文件路径与进度，不存储小说全文。**
 - 应用不联网、不上报任何数据。
 

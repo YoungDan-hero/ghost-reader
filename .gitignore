@@ -6,6 +6,10 @@ release/
 dist/
 out/
 
+# Icon source (keep .icns only)
+build/*.png
+build/*.iconset/
+
 # App runtime data (local only)
 store.json
 

@@ -1,8 +1,8 @@
 {
-  "name": "terminal-helper",
-  "productName": "Terminal",
+  "name": "ghost-reader",
+  "productName": "GhostReader",
   "version": "1.0.0",
-  "description": "A terminal utility.",
+  "description": "A ghost-mode TXT reader — float your novel as bare text on any screen.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -17,8 +17,9 @@
     "electron-builder": "24.13.3"
   },
   "build": {
-    "appId": "com.yangdan.terminal",
-    "productName": "Terminal",
+    "appId": "com.yangdan.ghostreader",
+    "productName": "GhostReader",
+    "icon": "build/GhostReader.icns",
     "directories": {
       "output": "release"
     },
@@ -28,7 +29,7 @@
       "index.html"
     ],
     "mac": {
-      "category": "public.app-category.developer-tools",
+      "category": "public.app-category.utilities",
       "target": [
         {
           "target": "dmg",
@@ -42,7 +43,7 @@
       "identity": null
     },
     "dmg": {
-      "title": "Terminal"
+      "title": "GhostReader"
     }
   }
 }

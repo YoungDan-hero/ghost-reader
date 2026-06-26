@@ -9,6 +9,20 @@ let win = null;
 function storeFile() {
   return path.join(app.getPath('userData'), 'store.json');
 }
+// 旧版 productName=Terminal,新版改 GhostReader 后用户数据目录变了,
+// 启动时把旧目录的 store.json 迁移过来,保住已有进度/书架/ghost 样式
+function migrateLegacyStore() {
+  try {
+    const newPath = storeFile();
+    if (fs.existsSync(newPath)) return; // 新目录已有数据,不覆盖
+    const legacyDir = path.join(app.getPath('appData'), 'Terminal');
+    const legacyFile = path.join(legacyDir, 'store.json');
+    if (fs.existsSync(legacyFile)) {
+      fs.mkdirSync(app.getPath('userData'), { recursive: true });
+      fs.copyFileSync(legacyFile, newPath);
+    }
+  } catch (e) { /* 迁移失败不阻塞启动 */ }
+}
 function readStore() {
   try {
     const raw = fs.readFileSync(storeFile(), 'utf-8');
@@ -49,7 +63,7 @@ function createWindow() {
     height: 560,
     minWidth: 120,    // 允许极度缩小,只剩标题栏也能缩
     minHeight: 30,    // 仅标题栏高度,几乎贴底
-    title: 'Terminal',
+    title: 'GhostReader',
     backgroundColor: '#00000000', // 透明:允许 ghost 模式把背景完全藏掉
     transparent: true,            // 窗口透明(创建时设定,不可运行时切换)
     hasShadow: true,              // 正常态保留阴影更像真窗口;ghost 态关掉
@@ -94,6 +108,8 @@ function setGhostMode(on) {
 }
 
 app.whenReady().then(() => {
+  // 迁移旧版(Terminal)的用户数据到新目录(GhostReader),保住进度/书架/样式
+  migrateLegacyStore();
   // 从 Dock 隐藏图标,程序坞里看不到这个 app
   if (process.platform === 'darwin' && app.dock) {
     app.dock.hide();
